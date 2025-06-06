@@ -8,5 +8,3 @@ instance/
 .env
 *.log
 *.pem
-logs/etl_execution.log
-logs/controlador.log
