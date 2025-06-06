@@ -8,5 +8,3 @@ instance/
 .env
 *.log
 *.pem
-# remove certificate files
-*.key
