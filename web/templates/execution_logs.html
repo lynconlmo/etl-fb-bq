@@ -1,0 +1,51 @@
+<!-- templates/execution_logs.html -->
+{% extends "base.html" %}
+
+{% block title %}Logs e Histórico - ETL Monitor{% endblock %}
+
+{% block content %}
+<div class="logs-container">
+    <h2 class="mb-4">Logs e Histórico de Execuções</h2>
+
+    <!-- Seleção de Registros por Página -->
+    <form method="get" action="{{ url_for('logs.execution_logs') }}" class="form-inline mb-3">
+        <label for="per_page" class="mr-2">Registros por página:</label>
+        <select name="per_page" id="per_page" class="form-control mr-2" onchange="this.form.submit()">
+            <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+            <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            <option value="0" {% if per_page == 0 %}selected{% endif %}>Todos</option>
+        </select>
+    </form>
+
+    <!-- Tabela de Logs -->
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Início</th>
+                <th>Término</th>
+                <th>Status</th>
+                <th>Registros Processados</th>
+                <th>Detalhes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for execution in executions %}
+            <tr>
+                <td>{{ execution.id }}</td>
+                <td>{{ execution.start_time }}</td>
+                <td>{{ execution.end_time or 'Em andamento' }}</td>
+                <td>{{ execution.status }}</td>
+                <td>{{ execution.records_processed }}</td>
+                <td>{{ execution.error_message or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Controles de Paginação -->
+    {% include 'partials/_pagination.html' with endpoint='execution_logs' kwargs={'per_page': per_page} %}
+</div>
+{% endblock %}

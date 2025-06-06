@@ -1,0 +1,22 @@
+<table class="table">
+    <thead>
+        <tr>
+            {% for header in headers %}
+                <th>{{ header }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr data-id="{{ user.id }}">
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ 'Sim' if user.is_admin else 'Não' }}</td>
+            <td>
+                <button class="btn btn-warning change-password" data-id="{{ user.id }}">Alterar Senha</button>
+                <button class="btn btn-danger delete-user" data-id="{{ user.id }}">Excluir</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

@@ -1,0 +1,286 @@
+<!-- templates/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ETL Monitor{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h2 class="mb-4">Monitoramento da ETL</h2>
+    
+    <form id="start-etl-form" class="mb-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="start-mode">Iniciar por:</label>
+            <select id="start-mode" class="form-control mb-2" name="start_mode" required>
+                <option value="schedule">Agendamento</option>
+                <option value="manual">Dados da ETL informados manualmente</option>
+            </select>
+        </div>
+        <div id="start-by-schedule">
+            <label for="select-schedule">Agendamento:</label>
+            <select id="select-schedule" class="form-control mb-2" name="schedule_id">
+                <option value="">Selecione um agendamento</option>
+                {% for schedule in schedules %}
+                <option value="{{ schedule.id }}">{{ schedule.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="start-by-manual" style="display:none;">
+            <label for="origin_id">Origem:</label>
+            <select class="form-control mb-2" id="origin_id" name="origin_id">
+                <option value="">Selecione uma origem</option>
+            </select>
+            <label for="script_id">Script:</label>
+            <select class="form-control mb-2" id="script_id" name="script_id" disabled>
+                <option value="">Selecione um script</option>
+            </select>
+            <label for="destination_id">Destino:</label>
+            <select class="form-control mb-2" id="destination_id" name="destination_id" disabled>
+                <option value="">Selecione um destino</option>
+            </select>
+        </div>
+        <div class="d-flex gap-2 mb-3">
+            <button id="start-etl" type="submit" class="btn btn-success flex-fill">Iniciar ETL</button>
+            <button id="stop-etl" type="button" class="btn btn-danger flex-fill" disabled>Parar ETL</button>
+        </div>
+    </form>
+
+    <form method="get" action="{{ url_for('dashboard') }}">
+        <label for="status">Status:</label>
+        <select name="status" id="status">
+            <option value="">Todos</option>
+            <option value="Completed">Concluído</option>
+            <option value="Failed">Falhou</option>
+            <option value="Scheduled">Agendado</option>
+            <option value="Server Restarted">Servidor Reiniciado</option>
+        </select>
+
+        <label for="start_date">Data Inicial:</label>
+        <input type="date" name="start_date" id="start_date">
+
+        <label for="end_date">Data Final:</label>
+        <input type="date" name="end_date" id="end_date">
+
+        <button type="submit">Filtrar</button>
+    </form>
+
+    <h3 class="mt-4">Execuções Recentes</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Records Processed</th>
+            </tr>
+        </thead>
+        <tbody id="executions-table">
+            {% for execution in executions %}
+            <tr>
+                <td>{{ execution.id }}</td>
+                <td>{{ execution.status }}</td>
+                <td>{{ execution.start_time }}</td>
+                <td>{{ execution.end_time }}</td>
+                <td>{{ execution.records_processed }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="loading-spinner" style="display: none; text-align: center; margin-top: 20px;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="sr-only">Carregando...</span>
+    </div>
+    <p>Aguarde, a operação está sendo processada...</p>
+</div>
+
+<script>
+    const csrfToken = "{{ csrf_token() }}";
+
+    // Botão "Iniciar ETL"
+    const startButton = document.querySelector('#start-etl');
+    const stopButton = document.querySelector('#stop-etl');
+
+    document.getElementById('start-etl-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const spinner = document.querySelector('#loading-spinner');
+        spinner.style.display = 'block';
+
+        const scheduleId = document.getElementById('select-schedule').value;
+        const originId = document.getElementById('origin_id').value;
+        const scriptId = document.getElementById('script_id').value;
+        const destinationId = document.getElementById('destination_id').value;
+
+        fetch('/etl/start_etl', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                schedule_id: scheduleId || null,
+                origin_id: originId || null,
+                script_id: scriptId || null,
+                destination_id: destinationId || null
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            spinner.style.display = 'none';
+            if (data.error) {
+                alert(`Erro: ${data.error}`);
+            } else {
+                alert(`Mensagem: ${data.message}`);
+                location.reload();
+            }
+        })
+        .catch(error => {
+            spinner.style.display = 'none';
+            alert('Erro ao iniciar a ETL.');
+        });
+    });
+
+    // Botão "Parar ETL"
+    stopButton.addEventListener('click', function() {
+        const executionId = this.dataset.executionId;
+        if (!executionId) {
+            alert('Nenhuma execução em andamento para este agendamento.');
+            return;
+        }
+        fetch(`/stop_etl/${executionId}`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message || data.error);
+            location.reload();
+        });
+    });
+
+    document.getElementById('select-schedule').addEventListener('change', function() {
+        const scheduleId = this.value;
+        const stopButton = document.getElementById('stop-etl');
+        stopButton.disabled = true;
+
+        if (scheduleId) {
+            fetch(`/etl/get_last_execution_status/${scheduleId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Running') {
+                        stopButton.disabled = false;
+                        stopButton.dataset.executionId = data.execution_id; // para usar ao parar
+                    } else {
+                        stopButton.disabled = true;
+                        stopButton.dataset.executionId = '';
+                    }
+                });
+        }
+    });
+
+    function updateExecutionsTable() {
+        fetch('/get_executions')
+            .then(response => response.json())
+            .then(data => {
+                updateTable('executions-table', data.executions, execution => `
+                    <td>${execution.id}</td>
+                    <td>${execution.status}</td>
+                    <td>${execution.start_time}</td>
+                    <td>${execution.end_time}</td>
+                    <td>${execution.records_processed}</td>
+                `);
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar a tabela de execuções:', error);
+            });
+    }
+
+    setInterval(updateExecutionsTable, 30000); // Atualizar a cada 30 segundos
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Alternar modo de início
+        document.getElementById('start-mode').addEventListener('change', function() {
+            if (this.value === 'schedule') {
+                document.getElementById('start-by-schedule').style.display = '';
+                document.getElementById('start-by-manual').style.display = 'none';
+            } else {
+                document.getElementById('start-by-schedule').style.display = 'none';
+                document.getElementById('start-by-manual').style.display = '';
+            }
+        });
+
+        // Preencher selects de origem/script/destino via permissões (igual ao form de agendamento)
+        const originSelect = document.getElementById('origin_id');
+        const scriptSelect = document.getElementById('script_id');
+        const destinationSelect = document.getElementById('destination_id');
+
+        scriptSelect.disabled = true;
+        destinationSelect.disabled = true;
+
+        fetch('/permissions/get_allowed_origins/{{ current_user.id }}')
+            .then(response => response.json())
+            .then(origins => {
+                origins.forEach(origin => {
+                    const opt = document.createElement('option');
+                    opt.value = origin.id;
+                    opt.textContent = origin.name;
+                    originSelect.appendChild(opt);
+                });
+            });
+
+        originSelect.addEventListener('change', function() {
+            const originId = this.value;
+            scriptSelect.disabled = true;
+            destinationSelect.disabled = true;
+            scriptSelect.innerHTML = '<option value="">Selecione um script</option>';
+            destinationSelect.innerHTML = '<option value="">Selecione um destino</option>';
+
+            if (originId) {
+                fetch(`/schedules/get_scripts_for_origin/${originId}`)
+                    .then(response => response.json())
+                    .then(scripts => {
+                        scripts.forEach(script => {
+                            const opt = document.createElement('option');
+                            opt.value = script.id;
+                            opt.textContent = script.name;
+                            scriptSelect.appendChild(opt);
+                        });
+                        scriptSelect.disabled = false;
+                    });
+            }
+        });
+
+        scriptSelect.addEventListener('change', function() {
+            const originId = originSelect.value;
+            const scriptId = this.value;
+            destinationSelect.disabled = true;
+            destinationSelect.innerHTML = '<option value="">Selecione um destino</option>';
+
+            if (originId && scriptId) {
+                fetch(`/schedules/get_destinations_for_origin_script/${originId}/${scriptId}`)
+                    .then(response => response.json())
+                    .then(destinations => {
+                        destinations.forEach(dest => {
+                            const opt = document.createElement('option');
+                            opt.value = dest.id;
+                            opt.textContent = dest.name;
+                            destinationSelect.appendChild(opt);
+                        });
+                        destinationSelect.disabled = false;
+                    });
+            }
+        });
+
+        // Limpar selects dependentes ao trocar origem/script
+        originSelect.addEventListener('change', function() {
+            scriptSelect.value = '';
+            destinationSelect.value = '';
+        });
+        scriptSelect.addEventListener('change', function() {
+            destinationSelect.value = '';
+        });
+    });
+</script>
+{% endblock %}

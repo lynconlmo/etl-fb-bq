@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Agendamentos - ETL Monitor{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Gerenciamento de Agendamentos</h2>
+    <button id="toggleScheduleBtn" class="btn btn-success mb-3 d-block w-100"
+        type="button"
+        data-bs-toggle="collapse" data-bs-target="#novoAgendamentoPanel"
+        aria-expanded="false" aria-controls="novoAgendamentoPanel"
+        style="box-sizing: border-box;">
+        Novo Agendamento
+    </button>
+
+    <div class="collapse mb-4" id="novoAgendamentoPanel">
+        <div class="card card-body">
+            {% include 'partials/_form_create_schedule.html' %}
+        </div>
+    </div>
+
+    <h3 class="mt-5">Agendamentos Atuais</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Origem</th>
+                <th>Script</th>
+                <th>Destino</th>
+                <th>CRON</th>
+                <th>Ativo</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for schedule in schedules %}
+            <tr>
+                <td>{{ schedule.id }}</td>
+                <td>{{ schedule.name }}</td>
+                <td>{{ schedule.origin.name }}</td>
+                <td>{{ schedule.script.name }}</td>
+                <td>{{ schedule.destination.name }}</td>
+                <td>{{ schedule.cron_expression }}</td>
+                <td>{{ 'Sim' if schedule.active else 'Não' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('schedules.delete_schedule', schedule_id=schedule.id) }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                    </form>
+                    {% if schedule.active %}
+                    <form method="post" action="{{ url_for('schedules.pause_schedule', schedule_id=schedule.id) }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-warning btn-sm">Pausar</button>
+                    </form>
+                    {% else %}
+                    <form method="post" action="{{ url_for('schedules.resume_schedule', schedule_id=schedule.id) }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success btn-sm">Retomar</button>
+                    </form>
+                    {% endif %}
+                    <button type="button" class="btn btn-primary btn-sm"
+                        data-id="{{ schedule.id }}"
+                        data-name={{ schedule.name|tojson }}
+                        data-origin="{{ schedule.origin.id if schedule.origin else 'null' }}"
+                        data-script="{{ schedule.script.id if schedule.script else 'null' }}"
+                        data-destination="{{ schedule.destination.id if schedule.destination else 'null' }}"
+                        data-cron={{ schedule.cron_expression|tojson }}
+                        data-active="{{ 'true' if schedule.active else 'false' }}"
+                        onclick="editarAgendamentoBtn(this)">
+                        Editar
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var collapsePanel = document.getElementById('novoAgendamentoPanel');
+    var toggleBtn = document.getElementById('toggleScheduleBtn');
+
+    collapsePanel.addEventListener('show.bs.collapse', function () {
+        toggleBtn.classList.remove('btn-success');
+        toggleBtn.classList.add('btn-danger');
+        toggleBtn.textContent = 'Cancelar';
+    });
+    collapsePanel.addEventListener('hide.bs.collapse', function () {
+        toggleBtn.classList.remove('btn-danger');
+        toggleBtn.classList.add('btn-success');
+        toggleBtn.textContent = 'Novo Agendamento';
+    });
+});
+
+function editarAgendamentoBtn(button) {
+    var id = button.getAttribute('data-id');
+    var name = button.getAttribute('data-name');
+    var origin_id = button.getAttribute('data-origin');
+    var script_id = button.getAttribute('data-script');
+    var destination_id = button.getAttribute('data-destination');
+    var cron_expression = button.getAttribute('data-cron');
+    var active = button.getAttribute('data-active') === 'true';
+
+    // Preencher os campos principais
+    document.getElementById('schedule_id').value = id;
+    document.getElementById('name').value = name;
+    document.getElementById('origin_id').value = origin_id;
+
+    // Disparar o evento de change para carregar scripts
+    document.getElementById('origin_id').dispatchEvent(new Event('change'));
+
+    setTimeout(function() {
+        document.getElementById('script_id').value = script_id;
+        document.getElementById('script_id').dispatchEvent(new Event('change'));
+
+        setTimeout(function() {
+            document.getElementById('destination_id').value = destination_id;
+        }, 300);
+    }, 300);
+
+    document.getElementById('cron_expression').value = cron_expression;
+    document.getElementById('active').checked = active;
+
+    // NOVO: Selecionar periodicidade e disparar evento para montar campos dinâmicos
+    // Descobrir a periodicidade a partir do cron_expression
+    var periodicity = '';
+    if (/^\*\/\d+ \* \* \* \*$/.test(cron_expression)) {
+        periodicity = 'minute';
+    } else if (/^\d+ \*\/\d+ \* \* \*$/.test(cron_expression)) {
+        periodicity = 'hour';
+    } else if (/^\d+ \d+ \* \* \*$/.test(cron_expression)) {
+        periodicity = 'day';
+    } else if (/^\d+ \d+ \* \* \d+$/.test(cron_expression)) {
+        periodicity = 'week';
+    } else if (/^\d+ \d+ \d+ \* \*$/.test(cron_expression)) {
+        periodicity = 'month';
+    }
+    var periodicitySelect = document.getElementById('periodicity');
+    if (periodicity) {
+        periodicitySelect.value = periodicity;
+        periodicitySelect.dispatchEvent(new Event('change'));
+
+        // Aguarde o DOM atualizar os campos dinâmicos
+        setTimeout(function() {
+            // Parse o cron_expression e preencha os campos
+            var parts = cron_expression.split(' ');
+            if (periodicity === 'minute') {
+                // Ex: */5 * * * *
+                var interval = parts[0].split('/')[1] || 5;
+                document.getElementById('minute-interval').value = interval;
+            } else if (periodicity === 'hour') {
+                // Ex: 0 */2 * * *
+                document.getElementById('hour-minute').value = parts[0];
+                document.getElementById('hour-interval').value = parts[1].split('/')[1] || 1;
+            } else if (periodicity === 'day') {
+                // Ex: 15 3 * * *
+                document.getElementById('day-minute').value = parts[0];
+                document.getElementById('day-hour').value = parts[1];
+            } else if (periodicity === 'week') {
+                // Ex: 0 2 * * 1
+                document.getElementById('week-minute').value = parts[0];
+                document.getElementById('week-hour').value = parts[1];
+                document.getElementById('week-day').value = parts[4];
+            } else if (periodicity === 'month') {
+                // Ex: 0 2 1 * *
+                document.getElementById('month-minute').value = parts[0];
+                document.getElementById('month-hour').value = parts[1];
+                document.getElementById('month-day').value = parts[2];
+            }
+            // Atualizar a expressão CRON
+            updateCronExpression();
+        }, 200); // tempo suficiente para o DOM atualizar
+    }
+
+    // Abrir o painel de novo agendamento
+    const collapsePanel = document.getElementById('novoAgendamentoPanel');
+    const bsCollapse = new bootstrap.Collapse(collapsePanel, {toggle: false});
+    bsCollapse.show();
+
+    // Scroll para o topo do formulário
+    collapsePanel.scrollIntoView({behavior: "smooth"});
+}
+</script>
+{% endblock %}

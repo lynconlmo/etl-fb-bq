@@ -1,0 +1,26 @@
+<nav class="navbar navbar-dark bg-dark px-3">
+    <a class="navbar-brand" href="{{ url_for('dashboard') }}">ETL Monitor</a>
+    <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar"
+        aria-controls="offcanvasNavbar" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="offcanvas offcanvas-end bg-dark text-white" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Menu</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+        </div>
+        <div class="offcanvas-body">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('dashboard') }}">Início</a></li>
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('users.manage_users') }}">Gerenciar Usuários</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('schedules.manage_schedules') }}">Gerenciar Agendamentos</a></li>
+                {% endif %}
+                {% if current_user.is_authenticated %}
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('users.change_password_page') }}">Alterar Senha</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.logout') }}">Logout</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>

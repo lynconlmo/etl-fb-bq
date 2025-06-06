@@ -1,0 +1,115 @@
+<!-- templates/manage_users.html -->
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Usuários - ETL Monitor{% endblock %}
+
+{% block content %}
+<div class="users-container">
+    <h2 class="mb-4">Gerenciamento de Usuários</h2>
+    <button id="toggleUserBtn" class="btn btn-success mb-2 d-block w-100"
+        type="button"
+        data-bs-toggle="collapse" data-bs-target="#novoUsuarioPanel"
+        aria-expanded="false" aria-controls="novoUsuarioPanel"
+        style="box-sizing: border-box;">
+        Novo Usuário
+    </button>
+
+    <div class="collapse mb-4" id="novoUsuarioPanel">
+        <div class="card card-body">
+            {% include 'partials/_form_create_user.html' %}
+        </div>
+    </div>
+
+    <!-- Tabela de usuários -->
+    {% include 'partials/_table.html' %}
+</div>
+
+<!-- Modal para alterar senha de outro usuário -->
+<div id="change-password-modal" class="modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Alterar Senha do Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="change-password-form" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-group">
+                        <label for="new-password">Nova Senha:</label>
+                        <input type="password" class="form-control" id="new-password" name="new_password" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="save-password" class="btn btn-primary">Salvar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Painel de novo usuário (collapse)
+    var collapsePanel = document.getElementById('novoUsuarioPanel');
+    var toggleBtn = document.getElementById('toggleUserBtn');
+    if (collapsePanel && toggleBtn) {
+        collapsePanel.addEventListener('show.bs.collapse', function () {
+            toggleBtn.classList.remove('btn-success');
+            toggleBtn.classList.add('btn-danger');
+            toggleBtn.textContent = 'Cancelar';
+        });
+        collapsePanel.addEventListener('hide.bs.collapse', function () {
+            toggleBtn.classList.remove('btn-danger');
+            toggleBtn.classList.add('btn-success');
+            toggleBtn.textContent = 'Novo Usuário';
+        });
+    }
+
+    // Botão de abrir modal (se existir)
+    var openUserModalBtn = document.getElementById('open-user-modal');
+    if (openUserModalBtn) {
+        openUserModalBtn.addEventListener('click', function() {
+            openModal('user-modal');
+        });
+    }
+
+    // Botão de criar usuário (se existir)
+    var createUserBtn = document.getElementById('create-user');
+    if (createUserBtn) {
+        createUserBtn.addEventListener('click', function () {
+            submitFormWithFetch('user-form', '/create_user');
+        });
+    }
+
+    // Botões de excluir usuário
+    document.querySelectorAll('.delete-user').forEach(function(button) {
+        button.addEventListener('click', function () {
+            const userId = this.getAttribute('data-id');
+            deleteUser(userId);
+        });
+    });
+
+    // Botões de alterar senha
+    document.querySelectorAll('.change-password').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const userId = this.getAttribute('data-id');
+            const form = document.getElementById('change-password-form');
+            form.action = `/change_user_password/${userId}`;
+            var modal = new bootstrap.Modal(document.getElementById('change-password-modal'));
+            modal.show();
+        });
+    });
+
+    // Botão de salvar senha
+    var savePasswordBtn = document.getElementById('save-password');
+    if (savePasswordBtn) {
+        savePasswordBtn.addEventListener('click', function() {
+            const form = document.getElementById('change-password-form');
+            form.submit();
+        });
+    }
+});
+</script>
+{% endblock %}
